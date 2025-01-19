@@ -1,0 +1,37 @@
+version: "3"
+
+services:
+
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DB_HOST=localhost
+      - DB_USER=postgres
+      - DB_NAME=english_science
+      - DB_PASSWORD=postgres
+    depends_on:
+      - db
+    volumes:
+      - .:/usr/src/app
+    networks:
+      - backend
+
+  db:
+    image: postgres
+    environment:
+      - POSTGRES_DB=english_science
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - .:/usr/src/app/postgresql
+    networks:
+      - backend
+
+volumes:
+  postgres_data:
+
+networks:
+  backend:
+     driver: bridge
