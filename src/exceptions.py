@@ -8,7 +8,7 @@ class TeacherError(ApiError):
 
 
 class TeacherNotFoundError(TeacherError):
-    def __init__(self, field: t.Union[str, int]):
+    def __init__(self, field: str | int):
         self.status_code = 404
         self.message = f'Учитель не найден по указанным параметрам {field}'
 

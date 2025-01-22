@@ -14,7 +14,7 @@ from src.settings.settings import Config
 
 
 class TokenData(BaseModel):
-    username: t.Optional[str] = None
+    username: str | None = None
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 

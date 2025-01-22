@@ -209,3 +209,19 @@ async def delete_unit_word(
     async with async_unit_of_work:
         repository = lesson_repo.WordRepository(session)
         await repository.delete(word_id)
+
+@lessons_router.post(
+    '/students',
+    status_code=fastapi.status.HTTP_201_CREATED,
+    response_model=None
+)
+async def create_student(
+    body: lesson_schema.CreateStudentRequest,
+    session: AsyncSession = fastapi.Depends(get_async_session),
+    user: Teacher = fastapi.Depends(get_current_user)
+):
+    async_unit_of_work = AsyncSqlAlchemyUnitOfWork(session)
+
+    async with async_unit_of_work:
+        repository = lesson_repo.StudentRepository(session)
+        await repository.create(body)

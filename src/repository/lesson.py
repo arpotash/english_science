@@ -4,7 +4,7 @@ import sqlalchemy as sa
 
 from src import models
 from src.repository.abstract import AbstractRepository
-from src.schemas.lesson import CreateUnitWordRequest
+from src.schemas.lesson import CreateUnitWordRequest, CreateStudentRequest
 
 
 class StudentRepository(AbstractRepository):
@@ -14,12 +14,21 @@ class StudentRepository(AbstractRepository):
         return (await self.session.execute(stmt)).scalars().all()
 
     async def update(self, idx: int, body: dict) -> None:
+        body = {key: value for key, value in body.items() if value is not None}
         stmt = sa.update(models.Student).where(models.Student.id == idx).values(**body)
+        await self.session.execute(stmt)
+
+    async def create(self, body: CreateStudentRequest) -> None:
+        stmt = sa.insert(models.Student).values(
+            fio=body.fio,
+            login=body.login,
+            is_active=True
+        )
         await self.session.execute(stmt)
 
 class UnitRepository(AbstractRepository):
 
-    async def list(self, student_id: t.Optional[int] = None):
+    async def list(self, student_id: int | None = None):
         stmt = sa.select(models.Unit)
         filters = []
 
@@ -37,7 +46,7 @@ class UnitRepository(AbstractRepository):
 
 class WordRepository(AbstractRepository):
 
-    async def list(self, unit_id: t.Optional[int] = None):
+    async def list(self, unit_id: int | None = None):
         stmt = sa.select(models.Word)
         filters = []
 
@@ -52,8 +61,8 @@ class WordRepository(AbstractRepository):
     async def create(
         self,
         body: CreateUnitWordRequest,
-        word_translation: t.Optional[str] = None,
-        unit_id: t.Optional[int] = None
+        word_translation: str | None = None,
+        unit_id: int | None = None
     ) -> int:
         stmt = sa.insert(models.Word).values(
             title=body.title,
