@@ -14,6 +14,24 @@ from src.utils import UnitParams
 
 lessons_router = fastapi.APIRouter(prefix='/lessons', tags=['lessons'])
 
+
+@lessons_router.post(
+    '/students',
+    status_code=fastapi.status.HTTP_201_CREATED,
+    response_model=None
+)
+async def create_student(
+    body: lesson_schema.CreateStudentRequest,
+    session: AsyncSession = fastapi.Depends(get_async_session),
+    user: Teacher = fastapi.Depends(get_current_user)
+):
+    async_unit_of_work = AsyncSqlAlchemyUnitOfWork(session)
+
+    async with async_unit_of_work:
+        repository = lesson_repo.StudentRepository(session)
+        await repository.create(body)
+
+
 @lessons_router.get(
     '/students',
     status_code=fastapi.status.HTTP_200_OK,
@@ -75,6 +93,42 @@ async def get_units_by_student(
         ) for unit in units
     ]
 
+@lessons_router.post(
+    '/students/{student_id}/units',
+    status_code=fastapi.status.HTTP_201_CREATED,
+    response_model=None
+)
+async def create_unit(
+    body: lesson_schema.CreateUnitRequest,
+    student_id: int = fastapi.Path(...),
+    session: AsyncSession = fastapi.Depends(get_async_session),
+    user: Teacher = fastapi.Depends(get_current_user)
+) -> None:
+    async_unit_of_work = AsyncSqlAlchemyUnitOfWork(session)
+
+    async with async_unit_of_work:
+        repository = lesson_repo.UnitRepository(session)
+        await repository.create(body, student_id=student_id)
+
+@lessons_router.patch(
+    '/students/{student_id}/units/{unit_id}',
+    status_code=fastapi.status.HTTP_200_OK,
+    response_model=None
+)
+async def update_unit(
+    body: lesson_schema.UpdateUnitRequest,
+    student_id: int = fastapi.Path(...),
+    unit_id: int = fastapi.Path(...),
+    session: AsyncSession = fastapi.Depends(get_async_session),
+    user: Teacher = fastapi.Depends(get_current_user)
+) -> None:
+    async_unit_of_work = AsyncSqlAlchemyUnitOfWork(session)
+
+    async with async_unit_of_work:
+        repository = lesson_repo.UnitRepository(session)
+        await repository.update(unit_id, body.model_dump())
+
+
 
 @lessons_router.patch(
     '/teachers/{teacher_id}',
@@ -117,7 +171,7 @@ async def get_words_by_unit(
     ]
 
 @lessons_router.post(
-    '/unit/{unit_id}/words',
+    '/units/{unit_id}/words',
     status_code=fastapi.status.HTTP_201_CREATED,
     response_model=None
 )
@@ -163,7 +217,7 @@ async def create_new_word_into_unit(
         )
 
 @lessons_router.put(
-    '/unit/{unit_id}/words/{word_id}',
+    '/units/{unit_id}/words/{word_id}',
     status_code=fastapi.status.HTTP_200_OK,
     response_model=None
 )
@@ -194,7 +248,7 @@ async def update_unit_word(
 
 
 @lessons_router.delete(
-    '/unit/{unit_id}/words/{word_id}',
+    '/units/{unit_id}/words/{word_id}',
     status_code=fastapi.status.HTTP_204_NO_CONTENT,
     response_model=None
 )
@@ -209,19 +263,3 @@ async def delete_unit_word(
     async with async_unit_of_work:
         repository = lesson_repo.WordRepository(session)
         await repository.delete(word_id)
-
-@lessons_router.post(
-    '/students',
-    status_code=fastapi.status.HTTP_201_CREATED,
-    response_model=None
-)
-async def create_student(
-    body: lesson_schema.CreateStudentRequest,
-    session: AsyncSession = fastapi.Depends(get_async_session),
-    user: Teacher = fastapi.Depends(get_current_user)
-):
-    async_unit_of_work = AsyncSqlAlchemyUnitOfWork(session)
-
-    async with async_unit_of_work:
-        repository = lesson_repo.StudentRepository(session)
-        await repository.create(body)
