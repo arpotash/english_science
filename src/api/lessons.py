@@ -1,7 +1,7 @@
 import fastapi
-import httpx
 from fastapi import UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi.responses import JSONResponse
 
 from src.dependencies.auth_dependency import get_current_user
 from src.external_systems.unit_of_work import AsyncSqlAlchemyUnitOfWork
@@ -181,26 +181,32 @@ async def create_new_word_into_unit(
 
     word_meta = await OxfordApi.parse_word_from_api(body.title)
 
-    if word_meta:
-        word_meaning = OxfordApi.get_meaning(word_meta)
-        word_synonyms = OxfordApi.get_synonyms(word_meta)
+    if not word_meta:
+        return JSONResponse(
+            status_code=fastapi.status.HTTP_404_NOT_FOUND,
+            content={'details': 'Слово не найден'}
+        )
 
-        async with async_unit_of_work:
-            repository = lesson_repo.WordRepository(session)
+    word_meaning = OxfordApi.get_meaning(word_meta)
+    word_synonyms = OxfordApi.get_synonyms(word_meta)
 
-            word_id = await repository.create(body, word_meaning, unit_id)
-            unit_words = await repository.list(unit_id)
-            gaaging_idx = UnitParams.calculate_gag_index(unit_words)
-            diversity_idx = UnitParams.calculate_diversity_index(unit_words)
+    async with async_unit_of_work:
+        repository = lesson_repo.WordRepository(session)
 
-            repository = lesson_repo.WordSynonymRepository(session)
-            await repository.bulk_create(word_synonyms, word_id)
+        word_id = await repository.create(body, word_meaning, unit_id)
+        unit_words = await repository.list(unit_id)
+        gaaging_idx = UnitParams.calculate_gag_index(unit_words)
+        diversity_idx = UnitParams.calculate_diversity_index(unit_words)
 
-            repository = lesson_repo.UnitRepository(session)
-            await repository.update(
-                unit_id,
-                {'gaaging_idx': gaaging_idx, 'diversity_idx': diversity_idx}
-            )
+        repository = lesson_repo.WordSynonymRepository(session)
+        await repository.bulk_create(word_synonyms, word_id)
+
+        repository = lesson_repo.UnitRepository(session)
+        await repository.update(
+            unit_id,
+            {'gaaging_idx': gaaging_idx, 'diversity_idx': diversity_idx}
+        )
+
 
 @lessons_router.patch(
     '/units/{unit_id}/words/{word_id}',
