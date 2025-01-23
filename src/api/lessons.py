@@ -117,7 +117,6 @@ async def create_unit(
 )
 async def update_unit(
     body: lesson_schema.UpdateUnitRequest,
-    student_id: int = fastapi.Path(...),
     unit_id: int = fastapi.Path(...),
     session: AsyncSession = fastapi.Depends(get_async_session),
 ) -> None:
@@ -293,3 +292,24 @@ async def upload_unit_words(
             unit_id,
             {'gaaging_idx': gaaging_idx, 'diversity_idx': diversity_idx}
         )
+
+@lessons_router.get(
+    '/words/{word_id}/synonyms',
+    status_code=fastapi.status.HTTP_200_OK,
+    response_model=list[lesson_schema.WordSynonymsSchema]
+)
+async def get_word_synonyms(
+    word_id: int = fastapi.Path(...),
+    session: AsyncSession = fastapi.Depends(get_async_session),
+) -> list[lesson_schema.WordSynonymsSchema]:
+    async_unit_of_work = AsyncSqlAlchemyUnitOfWork(session)
+    repository = lesson_repo.WordSynonymRepository(session)
+
+    async with async_unit_of_work:
+        word_synonyms = await repository.list(word_id=word_id)
+
+    return [
+        lesson_schema.WordSynonymsSchema(id=synonym.id, title=synonym.title)
+        for synonym
+        in word_synonyms
+    ]

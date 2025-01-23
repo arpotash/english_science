@@ -56,3 +56,7 @@ class UpdateUnitRequest(pydantic.BaseModel):
 class CsvFileColumns(pydantic.BaseModel):
     title: str
     topic: str
+
+class WordSynonymsSchema(pydantic.BaseModel):
+    id: int
+    title: str

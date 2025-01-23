@@ -57,7 +57,7 @@ class UnitRepository(AbstractRepository):
 
 class WordRepository(AbstractRepository):
 
-    async def list(self, unit_id: int | None = None):
+    async def list(self, unit_id: int | None = None) -> list:
         stmt = sa.select(models.Word)
         filters = []
 
@@ -102,3 +102,15 @@ class WordSynonymRepository(AbstractRepository):
                 word_id=word_id,
             )
             await self.session.execute(stmt)
+
+    async def list(self, word_id: int | None = None) -> list:
+        stmt = sa.select(models.WordSynonyms)
+        filters = []
+
+        if word_id:
+            filters.append(models.WordSynonyms.word_id == word_id)
+
+        stmt = stmt.filter(*filters)
+        word_synonyms = (await self.session.execute(stmt)).scalars().all()
+
+        return word_synonyms
