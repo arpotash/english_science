@@ -71,13 +71,14 @@ class WordRepository(AbstractRepository):
 
     async def create(
         self,
-        body: lesson_schemas.CreateUnitWordRequest,
+        body: lesson_schemas.CreateUnitWordRequest | lesson_schemas.CsvFileColumns,
         word_translation: str | None = None,
         unit_id: int | None = None
     ) -> int:
         stmt = sa.insert(models.Word).values(
             title=body.title,
             unit_id=unit_id,
+            topic=body.topic,
             translation=word_translation
         )
         result = await self.session.execute(stmt)

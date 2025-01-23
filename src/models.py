@@ -48,6 +48,7 @@ class Word(Base):
     unit_id: orm.Mapped[int] = orm.mapped_column(sa.Integer, sa.ForeignKey('unit.id'))
     unit = orm.relationship("Unit", back_populates="words")
     translation: orm.Mapped[str] = orm.mapped_column(sa.String)
+    topic: orm.Mapped[str] = orm.mapped_column(sa.String, nullable=True)
     completed: orm.Mapped[bool] = orm.mapped_column(sa.Boolean, default=False)
     word_synonyms = orm.relationship("WordSynonyms", back_populates="word")
 

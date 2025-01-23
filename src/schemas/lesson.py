@@ -19,17 +19,19 @@ class WordForListingResponse(pydantic.BaseModel):
     id: int
     title: str
     translation: str
+    topic: str | None = None
 
 class CreateUnitWordRequest(pydantic.BaseModel):
     title: str
+    topic: str
 
 class CreateUnitRequest(pydantic.BaseModel):
     name: str
 
 class UpdateUnitWordRequest(pydantic.BaseModel):
-    title: str
-    translation: str
-    completed: bool
+    title: str | None = None
+    translation: str | None = None
+    completed: bool | None = None
 
 class CreateStudentRequest(pydantic.BaseModel):
     login: str
@@ -49,3 +51,8 @@ class UpdateTeacherRequest(pydantic.BaseModel):
 
 class UpdateUnitRequest(pydantic.BaseModel):
     name: str | None = None
+
+
+class CsvFileColumns(pydantic.BaseModel):
+    title: str
+    topic: str

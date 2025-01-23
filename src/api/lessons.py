@@ -1,5 +1,6 @@
 import fastapi
 import httpx
+from fastapi import UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.dependencies.auth_dependency import get_current_user
@@ -10,9 +11,13 @@ from src.repository import lesson as lesson_repo
 from src.schemas import lesson as lesson_schema
 from src.repository import auth as auth_repo
 from src.settings.settings import Config
-from src.utils import UnitParams
+from src.utils import UnitParams, CsvFileManager, OxfordApi
 
-lessons_router = fastapi.APIRouter(prefix='/lessons', tags=['lessons'])
+lessons_router = fastapi.APIRouter(
+    prefix='/lessons',
+    tags=['lessons'],
+    dependencies=[fastapi.Depends(get_current_user)]
+)
 
 
 @lessons_router.post(
@@ -23,7 +28,6 @@ lessons_router = fastapi.APIRouter(prefix='/lessons', tags=['lessons'])
 async def create_student(
     body: lesson_schema.CreateStudentRequest,
     session: AsyncSession = fastapi.Depends(get_async_session),
-    user: Teacher = fastapi.Depends(get_current_user)
 ):
     async_unit_of_work = AsyncSqlAlchemyUnitOfWork(session)
 
@@ -39,7 +43,6 @@ async def create_student(
 )
 async def get_students(
     session: AsyncSession = fastapi.Depends(get_async_session),
-    user: Teacher = fastapi.Depends(get_current_user)
 ) -> list[lesson_schema.StudentForListingResponse]:
     async_unit_of_work = AsyncSqlAlchemyUnitOfWork(session)
 
@@ -62,7 +65,6 @@ async def update_student_profile(
     body: lesson_schema.UpdateStudentRequest,
     student_id: int = fastapi.Path(...),
     session: AsyncSession = fastapi.Depends(get_async_session),
-    user: Teacher = fastapi.Depends(get_current_user)
 ) -> None:
     async_unit_of_work = AsyncSqlAlchemyUnitOfWork(session)
 
@@ -79,7 +81,6 @@ async def update_student_profile(
 async def get_units_by_student(
     student_id: int = fastapi.Path(...),
     session: AsyncSession = fastapi.Depends(get_async_session),
-    user: Teacher = fastapi.Depends(get_current_user)
 ) -> list[lesson_schema.UnitForListingResponse]:
     async_unit_of_work = AsyncSqlAlchemyUnitOfWork(session)
 
@@ -102,7 +103,6 @@ async def create_unit(
     body: lesson_schema.CreateUnitRequest,
     student_id: int = fastapi.Path(...),
     session: AsyncSession = fastapi.Depends(get_async_session),
-    user: Teacher = fastapi.Depends(get_current_user)
 ) -> None:
     async_unit_of_work = AsyncSqlAlchemyUnitOfWork(session)
 
@@ -120,7 +120,6 @@ async def update_unit(
     student_id: int = fastapi.Path(...),
     unit_id: int = fastapi.Path(...),
     session: AsyncSession = fastapi.Depends(get_async_session),
-    user: Teacher = fastapi.Depends(get_current_user)
 ) -> None:
     async_unit_of_work = AsyncSqlAlchemyUnitOfWork(session)
 
@@ -139,7 +138,6 @@ async def update_teacher_profile(
     body: lesson_schema.UpdateTeacherRequest,
     teacher_id: int = fastapi.Path(...),
     session: AsyncSession = fastapi.Depends(get_async_session),
-    user: Teacher = fastapi.Depends(get_current_user)
 ) -> None:
     async_unit_of_work = AsyncSqlAlchemyUnitOfWork(session)
 
@@ -156,7 +154,6 @@ async def update_teacher_profile(
 async def get_words_by_unit(
     unit_id: int = fastapi.Path(...),
     session: AsyncSession = fastapi.Depends(get_async_session),
-    user: Teacher = fastapi.Depends(get_current_user)
 ) -> list[lesson_schema.WordForListingResponse]:
     async_unit_of_work = AsyncSqlAlchemyUnitOfWork(session)
 
@@ -166,7 +163,7 @@ async def get_words_by_unit(
 
     return [
         lesson_schema.WordForListingResponse(
-            id=word.id, title=word.title, translation=word.translation
+            id=word.id, title=word.title, translation=word.translation, topic=word.topic
         ) for word in words
     ]
 
@@ -183,40 +180,30 @@ async def create_new_word_into_unit(
 ):
     async_unit_of_work = AsyncSqlAlchemyUnitOfWork(session)
 
-    async with httpx.AsyncClient() as client:
-        response = await client.get(
-            f'{Config.ENGLISH_VOCABULAR_URL}/{body.title}',
-            params={'key': Config.ENGLISH_VOCABULAR_API_KEY}
-        )
+    word_meta = await OxfordApi.parse_word_from_api(body.title)
 
-        if response.status_code == 200:
-            response_json = response.json()[0]
+    if word_meta:
+        word_meaning = OxfordApi.get_meaning(word_meta)
+        word_synonyms = OxfordApi.get_synonyms(word_meta)
 
-            if response_json.get('meta'):
-                word_synonyms = response_json['meta']['syns'][0]
-                word_translation = response_json['shortdef'][0]
+        async with async_unit_of_work:
+            repository = lesson_repo.WordRepository(session)
 
+            word_id = await repository.create(body, word_meaning, unit_id)
+            unit_words = await repository.list(unit_id)
+            gaaging_idx = UnitParams.calculate_gag_index(unit_words)
+            diversity_idx = UnitParams.calculate_diversity_index(unit_words)
 
+            repository = lesson_repo.WordSynonymRepository(session)
+            await repository.bulk_create(word_synonyms, word_id)
 
-    async with async_unit_of_work:
-        repository = lesson_repo.WordRepository(session)
+            repository = lesson_repo.UnitRepository(session)
+            await repository.update(
+                unit_id,
+                {'gaaging_idx': gaaging_idx, 'diversity_idx': diversity_idx}
+            )
 
-        word_id = await repository.create(body, word_translation, unit_id)
-        unit_words = await repository.list(unit_id)
-        gaaging_idx = UnitParams.calculate_gag_index(unit_words)
-        diversity_idx = UnitParams.calculate_diversity_index(unit_words)
-
-        repository = lesson_repo.WordSynonymRepository(session)
-        await repository.bulk_create(word_synonyms, word_id)
-
-    async with async_unit_of_work:
-        repository = lesson_repo.UnitRepository(session)
-        await repository.update(
-            unit_id,
-            {'gaaging_idx': gaaging_idx, 'diversity_idx': diversity_idx}
-        )
-
-@lessons_router.put(
+@lessons_router.patch(
     '/units/{unit_id}/words/{word_id}',
     status_code=fastapi.status.HTTP_200_OK,
     response_model=None
@@ -226,7 +213,6 @@ async def update_unit_word(
     unit_id: int = fastapi.Path(...),
     session: AsyncSession = fastapi.Depends(get_async_session),
     word_id: int = fastapi.Path(...),
-    user: Teacher = fastapi.Depends(get_current_user)
 ) -> None:
     async_unit_of_work = AsyncSqlAlchemyUnitOfWork(session)
 
@@ -256,10 +242,54 @@ async def delete_unit_word(
     unit_id: int = fastapi.Path(...),
     session: AsyncSession = fastapi.Depends(get_async_session),
     word_id: int = fastapi.Path(...),
-    user: Teacher = fastapi.Depends(get_current_user)
 ) -> None:
     async_unit_of_work = AsyncSqlAlchemyUnitOfWork(session)
 
     async with async_unit_of_work:
         repository = lesson_repo.WordRepository(session)
         await repository.delete(word_id)
+
+@lessons_router.post(
+    'units/{unit_id}/words/upload',
+    status_code=fastapi.status.HTTP_201_CREATED,
+    response_model=None
+)
+async def upload_unit_words(
+    unit_id: int = fastapi.Path(...),
+    session: AsyncSession = fastapi.Depends(get_async_session),
+    file: UploadFile = fastapi.File(...)
+) -> None:
+    async_unit_of_work = AsyncSqlAlchemyUnitOfWork(session)
+
+    contents = await file.read()
+    contents = contents.decode("utf-8")
+    list_of_words = CsvFileManager.read(contents)
+
+    for one_word in list_of_words:
+        async with async_unit_of_work:
+            word_meta = await OxfordApi.parse_word_from_api(one_word.title)
+
+            if word_meta:
+                word_meaning = OxfordApi.get_meaning(word_meta)
+                word_synonyms = OxfordApi.get_synonyms(word_meta)
+
+                word_repo = lesson_repo.WordRepository(session)
+                word_id = await word_repo.create(one_word, word_translation=word_meaning, unit_id=unit_id)
+
+                word_synonyms_repo = lesson_repo.WordSynonymRepository(session)
+                await word_synonyms_repo.bulk_create(word_synonyms, word_id)
+
+
+    async with async_unit_of_work:
+
+        repository = lesson_repo.WordRepository(session)
+        unit_words = await repository.list(unit_id)
+
+        gaaging_idx = UnitParams.calculate_gag_index(unit_words)
+        diversity_idx = UnitParams.calculate_diversity_index(unit_words)
+
+        repository = lesson_repo.UnitRepository(session)
+        await repository.update(
+            unit_id,
+            {'gaaging_idx': gaaging_idx, 'diversity_idx': diversity_idx}
+        )

@@ -1,9 +1,15 @@
+import abc
+import csv
+import typing as t
 from datetime import datetime, timezone, timedelta
+from io import StringIO
 
+import httpx
 import jwt
 import fastapi_mail
 
 from src.models import Word
+from src.schemas.lesson import CsvFileColumns
 from src.settings.settings import Config
 from passlib.context import CryptContext
 
@@ -84,3 +90,55 @@ class UnitParams:
         unique_words = len(set(word_names_lst))
 
         return 0 if total_words == 0 else unique_words / total_words
+
+
+class FileManager(abc.ABC):
+
+    @abc.abstractmethod
+    def read(self, file_name: str) -> t.NoReturn:
+        raise NotImplemented
+
+
+class CsvFileManager(FileManager):
+
+    @classmethod
+    def read(cls, file_content: str) -> list:
+        words = []
+
+        csv_data = csv.DictReader(StringIO(file_content))
+
+
+        for row in csv_data:
+            word_title, topic = row.get("Term"), row.get('Category')
+            words.append(CsvFileColumns(title=word_title, topic=topic))
+
+            if len(words) >= 20:
+                break
+
+        return words
+
+class OxfordApi:
+
+    @classmethod
+    async def parse_word_from_api(cls, title: str) -> dict | None:
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f'{Config.ENGLISH_VOCABULAR_URL}/{title}',
+                params={'key': Config.ENGLISH_VOCABULAR_API_KEY}
+            )
+
+            if response.status_code == 200:
+                response_json = response.json()
+
+                if isinstance(response_json, list) and isinstance(response_json[0], dict) and response_json[0].get('meta'):
+                    return response_json[0]
+
+
+    @classmethod
+    def get_meaning(cls, meta: dict) -> str:
+        return meta['shortdef'][0] if isinstance(meta.get('shortdef'), list) else meta['shortdef']
+
+    @classmethod
+    def get_synonyms(cls, meta: dict) -> list[str]:
+        return meta['meta']['syns'][0] if meta['meta']['syns'] else []
