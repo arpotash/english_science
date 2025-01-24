@@ -162,7 +162,11 @@ async def get_words_by_unit(
 
     return [
         lesson_schema.WordForListingResponse(
-            id=word.id, title=word.title, translation=word.translation, topic=word.topic
+            id=word.id,
+            title=word.title,
+            translation=word.translation,
+            topic=word.topic,
+            is_completed=word.completed
         ) for word in words
     ]
 

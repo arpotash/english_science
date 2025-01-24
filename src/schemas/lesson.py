@@ -20,6 +20,7 @@ class WordForListingResponse(pydantic.BaseModel):
     title: str
     translation: str
     topic: str | None = None
+    is_completed: bool
 
 class CreateUnitWordRequest(pydantic.BaseModel):
     title: str
