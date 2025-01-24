@@ -85,6 +85,7 @@ class WordRepository(AbstractRepository):
         return result.inserted_primary_key[0] if result.inserted_primary_key else 0
 
     async def update(self, idx: int, body: dict) -> None:
+        body = {key: value for key, value in body.items() if value is not None}
         stmt = sa.update(models.Word).where(models.Word.id == idx).values(**body)
         await self.session.execute(stmt)
 
